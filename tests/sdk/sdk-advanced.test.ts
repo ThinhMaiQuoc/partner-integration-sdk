@@ -44,6 +44,46 @@ describe("InsuranceSDK advanced behavior", () => {
     await expect(sdk.claims.create({ ...validClaimRequest, amount: -1 })).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it("rejects missing claim fields before making an API call", async () => {
+    const sdk = new InsuranceSDK({
+      apiKey: "pk_test_xxx",
+      environment: "sandbox",
+      baseUrl: "http://127.0.0.1:1/api/v1"
+    });
+
+    await expect(sdk.claims.create({} as CreateClaimRequest)).rejects.toMatchObject({
+      name: "ValidationError",
+      fields: {
+        policyId: "required",
+        claimType: "required",
+        diagnosisCode: "required",
+        treatmentDate: "required",
+        amount: "required",
+        currency: "required"
+      }
+    });
+  });
+
+  it("rejects invalid claim type before making an API call", async () => {
+    const sdk = new InsuranceSDK({
+      apiKey: "pk_test_xxx",
+      environment: "sandbox",
+      baseUrl: "http://127.0.0.1:1/api/v1"
+    });
+
+    await expect(
+      sdk.claims.create({
+        ...validClaimRequest,
+        claimType: "INVALID" as CreateClaimRequest["claimType"]
+      })
+    ).rejects.toMatchObject({
+      name: "ValidationError",
+      fields: {
+        claimType: "must be one of: OUTPATIENT, INPATIENT, EMERGENCY, DENTAL, OTHER"
+      }
+    });
+  });
+
   it("refreshes the cached token after it expires", async () => {
     await withSdk({ ...baseConfig, tokenExpiresInSeconds: 1 }, async (sdk) => {
       await sdk.claims.create(validClaimRequest);
@@ -119,6 +159,76 @@ describe("InsuranceSDK advanced behavior", () => {
     await withSdk({ ...baseConfig, tokenExpiresInSeconds: -1 }, async (sdk) => {
       await expect(sdk.claims.list()).rejects.toBeInstanceOf(AuthError);
     });
+  });
+
+  it("does not retry server-side validation errors", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(createJsonResponse(createTokenResponse(), 200))
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Request body contains invalid fields.",
+              fields: {
+                type: "required"
+              }
+            }
+          },
+          400
+        )
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const sdk = new InsuranceSDK({
+        apiKey: "pk_test_xxx",
+        environment: "sandbox",
+        baseUrl: "http://mock.local/api/v1"
+      });
+
+      await expect(
+        sdk.documents.upload("CLM-001", "receipt", {
+          type: "",
+          fileName: "receipt.txt"
+        })
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not retry non-refreshable 401 auth errors", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(createJsonResponse(createTokenResponse(), 200))
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          {
+            error: {
+              code: "INVALID_TOKEN",
+              message: "Bearer token is invalid."
+            }
+          },
+          401
+        )
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const sdk = new InsuranceSDK({
+        apiKey: "pk_test_xxx",
+        environment: "sandbox",
+        baseUrl: "http://mock.local/api/v1"
+      });
+
+      await expect(sdk.claims.list()).rejects.toBeInstanceOf(AuthError);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("emits upload progress ending at 100", async () => {
@@ -250,5 +360,23 @@ async function closeServer(server: Server): Promise<void> {
 async function sleep(ms: number): Promise<void> {
   await new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
+  });
+}
+
+function createTokenResponse(): Record<string, string | number> {
+  return {
+    token: "mock-token",
+    tokenType: "Bearer",
+    expiresIn: 3600,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString()
+  };
+}
+
+function createJsonResponse(body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json"
+    }
   });
 }
