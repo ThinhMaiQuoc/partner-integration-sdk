@@ -54,6 +54,7 @@ export interface UploadDocumentOptions {
   type: string;
   fileName?: string;
   contentType?: string;
+  onProgress?: (percent: number) => void;
 }
 
 export interface ApiErrorResponse {
@@ -66,9 +67,24 @@ export interface ApiErrorResponse {
 
 export type Environment = "sandbox" | "production";
 
+export interface RetryOptions {
+  maxAttempts?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+}
+
+export interface StatusChangeOptions {
+  intervalMs?: number;
+  onError?: (error: unknown) => void;
+}
+
+export type StatusChangeHandler = (newStatus: ClaimStatus, claim: Claim) => void;
+export type Unsubscribe = () => void;
+
 export interface InsuranceSDKConfig {
   apiKey: string;
   environment: Environment;
   timeout?: number;
   baseUrl?: string;
+  retry?: RetryOptions;
 }

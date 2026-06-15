@@ -13,5 +13,8 @@ export type {
   ListClaimsResponse,
   Pagination,
   PaginatedResponse,
+  RetryOptions,
+  StatusChangeHandler,
+  StatusChangeOptions,
   UploadDocumentOptions
 } from "../shared/types";

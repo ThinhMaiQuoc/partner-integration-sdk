@@ -52,11 +52,17 @@ export class InMemoryStore {
   }
 
   getClaim(id: string): Claim | undefined {
-    return this.claims.get(id);
+    const claim = this.claims.get(id);
+
+    if (claim === undefined) {
+      return undefined;
+    }
+
+    return this.applyStatusProgression(claim);
   }
 
   listClaims(params: Required<Pick<ListClaimsParams, "page" | "pageSize">> & Pick<ListClaimsParams, "status">): ListClaimsResponse {
-    const allClaims = Array.from(this.claims.values());
+    const allClaims = Array.from(this.claims.values()).map((claim) => this.applyStatusProgression(claim));
     const filteredClaims =
       params.status === undefined ? allClaims : allClaims.filter((claim) => claim.status === params.status);
     const total = filteredClaims.length;
@@ -102,6 +108,24 @@ export class InMemoryStore {
     this.documentsByClaimId.clear();
     this.claimSequence = 0;
     this.documentSequence = 0;
+  }
+
+  private applyStatusProgression(claim: Claim): Claim {
+    const elapsedMs = Date.now() - Date.parse(claim.createdAt);
+    const nextStatus = elapsedMs >= 2_000 ? "APPROVED" : elapsedMs >= 1_000 ? "NEEDS_REVIEW" : "PENDING";
+
+    if (claim.status !== nextStatus) {
+      const updatedClaim: Claim = {
+        ...claim,
+        status: nextStatus,
+        updatedAt: new Date().toISOString()
+      };
+
+      this.claims.set(claim.id, updatedClaim);
+      return updatedClaim;
+    }
+
+    return claim;
   }
 }
 

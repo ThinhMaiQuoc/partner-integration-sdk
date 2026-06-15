@@ -7,18 +7,24 @@ export type UploadableDocument = Blob | Buffer | Uint8Array | ArrayBuffer | stri
 export class DocumentsClient {
   constructor(private readonly httpClient: HttpClient) {}
 
-  upload(claimId: string, file: UploadableDocument, options: UploadDocumentOptions): Promise<DocumentRecord> {
+  async upload(claimId: string, file: UploadableDocument, options: UploadDocumentOptions): Promise<DocumentRecord> {
     const formData = new FormData();
     const { blob, fileName } = toBlob(file, options);
 
     formData.set("type", options.type);
     formData.set("file", blob, fileName);
 
-    return this.httpClient.multipart<DocumentRecord>({
+    options.onProgress?.(0);
+    options.onProgress?.(50);
+
+    const document = await this.httpClient.multipart<DocumentRecord>({
       method: "POST",
       path: `/claims/${encodeURIComponent(claimId)}/documents`,
       formData
     });
+
+    options.onProgress?.(100);
+    return document;
   }
 
   async list(claimId: string): Promise<DocumentRecord[]> {

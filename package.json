@@ -8,6 +8,9 @@
   "scripts": {
     "dev:server": "tsx src/server/index.ts",
     "build": "tsc -p tsconfig.json",
+    "example:simple": "tsx examples/simple-claim.ts",
+    "example:upload": "tsx examples/upload-document.ts",
+    "example:status": "tsx examples/status-tracking.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

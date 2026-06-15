@@ -5,6 +5,11 @@ import { DocumentsClient } from "./documents-client";
 import { HttpClient } from "./http-client";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_RETRY_OPTIONS = {
+  maxAttempts: 3,
+  baseDelayMs: 100,
+  maxDelayMs: 1_000
+};
 
 export class InsuranceSDK {
   readonly claims: ClaimsClient;
@@ -19,7 +24,13 @@ export class InsuranceSDK {
     const authManager = new AuthManager(baseUrl, config);
     const httpClient = new HttpClient({
       baseUrl,
-      authManager
+      authManager,
+      timeoutMs: this.timeout,
+      retry: {
+        maxAttempts: config.retry?.maxAttempts ?? DEFAULT_RETRY_OPTIONS.maxAttempts,
+        baseDelayMs: config.retry?.baseDelayMs ?? DEFAULT_RETRY_OPTIONS.baseDelayMs,
+        maxDelayMs: config.retry?.maxDelayMs ?? DEFAULT_RETRY_OPTIONS.maxDelayMs
+      }
     });
 
     this.claims = new ClaimsClient(httpClient);
