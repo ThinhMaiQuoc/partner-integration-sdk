@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "Mock insurance partner integration SDK and API server.",
+  "main": "dist/sdk/index.js",
+  "types": "dist/sdk/index.d.ts",
   "scripts": {
     "dev:server": "tsx src/server/index.ts",
     "build": "tsc -p tsconfig.json",
@@ -14,11 +16,13 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.1.1"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.6",
+    "@types/multer": "^2.1.0",
     "@types/node": "^20.14.10",
     "@types/supertest": "^6.0.2",
     "supertest": "^7.0.0",

@@ -4,6 +4,7 @@ import { loadServerConfig, type ServerConfig } from "./config";
 import { sendError } from "./http";
 import { createDelayMiddleware } from "./middleware/delay";
 import { createTransientFailureMiddleware } from "./middleware/transient-failure";
+import { createClaimsRouter } from "./routes/claims";
 import { createInMemoryStore, type InMemoryStore } from "./store";
 
 export interface CreateServerAppOptions {
@@ -40,8 +41,9 @@ export function createServerApp(options: CreateServerAppOptions = {}): express.E
   apiRouter.post("/auth/token", createTokenHandler({ config, store }));
   apiRouter.use(createAuthMiddleware({ config, store }));
   apiRouter.use(createTransientFailureMiddleware({ rate: config.transientFailureRate, random: options.random }));
+  apiRouter.use("/claims", createClaimsRouter(store));
   apiRouter.use((_req, res) => {
-    sendError(res, 404, "NOT_FOUND", "Endpoint is not implemented in Q1.");
+    sendError(res, 404, "NOT_FOUND", "Endpoint was not found.");
   });
 
   app.use("/api/v1", apiRouter);

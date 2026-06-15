@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+
 export interface ServerConfig {
   port: number;
   host: string;
@@ -19,26 +22,71 @@ const DEFAULT_CONFIG: ServerConfig = {
 };
 
 export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
-  const delayMinMs = readInteger(env.RESPONSE_DELAY_MIN_MS, DEFAULT_CONFIG.delayMinMs, "RESPONSE_DELAY_MIN_MS");
-  const delayMaxMs = readInteger(env.RESPONSE_DELAY_MAX_MS, DEFAULT_CONFIG.delayMaxMs, "RESPONSE_DELAY_MAX_MS");
+  const mergedEnv = env === process.env ? mergeDotEnv(env) : env;
+  const delayMinMs = readInteger(mergedEnv.RESPONSE_DELAY_MIN_MS, DEFAULT_CONFIG.delayMinMs, "RESPONSE_DELAY_MIN_MS");
+  const delayMaxMs = readInteger(mergedEnv.RESPONSE_DELAY_MAX_MS, DEFAULT_CONFIG.delayMaxMs, "RESPONSE_DELAY_MAX_MS");
 
   if (delayMaxMs < delayMinMs) {
     throw new Error("RESPONSE_DELAY_MAX_MS must be greater than or equal to RESPONSE_DELAY_MIN_MS");
   }
 
   return {
-    port: readInteger(env.PORT, DEFAULT_CONFIG.port, "PORT"),
-    host: env.HOST ?? DEFAULT_CONFIG.host,
-    jwtSecret: env.JWT_SECRET ?? DEFAULT_CONFIG.jwtSecret,
+    port: readInteger(mergedEnv.PORT, DEFAULT_CONFIG.port, "PORT"),
+    host: mergedEnv.HOST ?? DEFAULT_CONFIG.host,
+    jwtSecret: mergedEnv.JWT_SECRET ?? DEFAULT_CONFIG.jwtSecret,
     tokenExpiresInSeconds: readInteger(
-      env.TOKEN_EXPIRES_IN_SECONDS,
+      mergedEnv.TOKEN_EXPIRES_IN_SECONDS,
       DEFAULT_CONFIG.tokenExpiresInSeconds,
       "TOKEN_EXPIRES_IN_SECONDS"
     ),
-    transientFailureRate: readRate(env.TRANSIENT_FAILURE_RATE, DEFAULT_CONFIG.transientFailureRate),
+    transientFailureRate: readRate(mergedEnv.TRANSIENT_FAILURE_RATE, DEFAULT_CONFIG.transientFailureRate),
     delayMinMs,
     delayMaxMs
   };
+}
+
+function mergeDotEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return {
+    ...readDotEnvFile(path.resolve(process.cwd(), ".env")),
+    ...env
+  };
+}
+
+function readDotEnvFile(filePath: string): NodeJS.ProcessEnv {
+  if (!existsSync(filePath)) {
+    return {};
+  }
+
+  return readFileSync(filePath, "utf8")
+    .split(/\r?\n/)
+    .reduce<NodeJS.ProcessEnv>((values, line) => {
+      const trimmed = line.trim();
+
+      if (trimmed === "" || trimmed.startsWith("#")) {
+        return values;
+      }
+
+      const separatorIndex = trimmed.indexOf("=");
+      if (separatorIndex <= 0) {
+        return values;
+      }
+
+      const key = trimmed.slice(0, separatorIndex).trim();
+      const rawValue = trimmed.slice(separatorIndex + 1).trim();
+      values[key] = unquoteEnvValue(rawValue);
+      return values;
+    }, {});
+}
+
+function unquoteEnvValue(value: string): string {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+
+  return value;
 }
 
 function readInteger(value: string | undefined, fallback: number, name: string): number {
